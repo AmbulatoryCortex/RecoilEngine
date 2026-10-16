@@ -4,6 +4,7 @@
 #include "SMFGroundDrawer.h"
 #include "SMFReadMap.h"
 #include "Game/Camera.h"
+#include "Game/GlobalUnsynced.h"
 #include "Map/MapInfo.h"
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/ShadowHandler.h"
@@ -24,6 +25,14 @@
 #include "System/Misc/TracyDefs.h"
 
 static constexpr float SMF_TEXSQUARE_SIZE = 1024.0f;
+
+// Scales the LOS info-texture grade. 0 leaves ground albedo unchanged, 1 applies
+// the per-level luminance and saturation factors, 1.25 pushes them further from 1.
+CONFIG(float, InfoTexStrength)
+	.defaultValue(1.0f)
+	.minimumValue(0.0f)
+	.maximumValue(1.25f)
+	.description("Scales LOS info-texture grading away from neutral. 0 shows the map unchanged, 1 applies the per-level factors, 1.25 exaggerates them.");
 
 
 ISMFRenderState* ISMFRenderState::GetInstance(bool luaShaders, bool noop) {
@@ -199,6 +208,9 @@ void SMFRenderStateGLSL::Update(
 
 			glslShaders[n]->SetUniform("infoTexGen", 1.0f / (mapDims.pwr2mapx * SQUARE_SIZE), 1.0f / (mapDims.pwr2mapy * SQUARE_SIZE));
 			glslShaders[n]->SetUniform("infoTexIntensityMul", 1.0f);
+			glslShaders[n]->SetUniform("infoStrength", configHandler->GetFloat("InfoTexStrength"));
+			glslShaders[n]->SetUniform("infoAnimTime", 0.0f);
+			glslShaders[n]->SetUniform("infoLosGrade", 0.0f);
 			glslShaders[n]->SetUniform("specularTexGen", 1.0f / (mapDims.mapx * SQUARE_SIZE), 1.0f / (mapDims.mapy * SQUARE_SIZE));
 
 			glslShaders[n]->Disable();
@@ -289,6 +301,9 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	currShader->Enable();
 	currShader->SetUniform("mapHeights", readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
 	currShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	currShader->SetUniform("infoStrength", configHandler->GetFloat("InfoTexStrength"));
+	currShader->SetUniform("infoAnimTime", (gu != nullptr) ? gu->gameTime : 0.0f);
+	currShader->SetUniform("infoLosGrade", (infoTextureHandler->GetMode() == "los") ? 1.0f : 0.0f);
 
 	if (isAdv) {
 		currShader->SetUniform3v("cameraPos", &camera->GetPos()[0]);
