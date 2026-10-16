@@ -127,6 +127,7 @@ CMiniMap::CMiniMap()
 	bgShader->SetUniform("shadingTex", 0);
 	bgShader->SetUniform("minimapTex", 1);
 	bgShader->SetUniform("infomapTex", 2);
+	bgShader->SetUniform("infoGradeTex", 3);
 	bgShader->SetUniform("uvMult", isx, isy);
 	bgShader->SetUniform("infotexMul", 0.0f);
 	bgShader->Disable();

@@ -62,6 +62,8 @@ public:
 	void SetLosGradeUniforms(Shader::IProgramObject* shader) const;
 
 	virtual GLuint GetCurrentInfoTexture() const = 0;
+	// decoded LOS grade factors (also "$info:losgrade" for Lua), 0 if none
+	virtual GLuint GetLosGradeTexture() const = 0;
 	virtual int2   GetCurrentInfoTextureSize() const = 0;
 
 public:

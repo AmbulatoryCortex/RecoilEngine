@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaConstEngine.h"
+#include "LuaFeatureSupport.h"
 #include "LuaHandle.h"
 #include "LuaUtils.h"
 #include "Game/GameVersion.h"
@@ -32,7 +33,7 @@
  * @field nanoParticleUpdateCallin boolean Whether LuaUI receives batched `NanoParticleUpdate` lifecycle events
  * @field nanoParticlesGL4 boolean Whether the engine has the standalone shader-based nano particle effect (the `NanoParticles*` springsettings)
  * @field modelVertexColor boolean Whether glTF `COLOR_0` is loaded into the models VBO (`color`, attribute 15; opaque white when absent)
- * @field losInfoTexCodes boolean Whether "los" mode decodes explicit level codes from the game's infoLOS shader (R level 0/1/3/2/3/1, G jam, B=1 marker) and grades by the InfoTexStrength springsetting. Also exposed to info-texture Lua shaders as `Engine.FeatureSupport.losInfoTexCodes`
+ * @field losInfoTexCodes boolean Whether "los" mode decodes explicit level codes from the game's infoLOS shader (R level 0, 1/3, 2/3 or 1; G jam; B = 1 marker). `$info` then holds a legacy-compatible gray and `$info:losgrade` the decoded factors (r luminance mul, g saturation mul, b jam; r < 0.25 means not coded). Also visible to Lua shader definition files.
  */
 
 /***
@@ -66,33 +67,14 @@ bool LuaConstEngine::PushEntries(lua_State* L)
 	LuaPushNamedNumber(L, "gameSpeed", GAME_SPEED);
 	LuaPushNamedNumber(L, "maxCustomPaletteID", MAX_CUSTOM_COLORS - 1);
 
-	/* If possible, entries should be bools that resolve to false in the "old" version
-	 * and to true in the "new" version; this is because any version beforehand has it
-	 * "set" to nil which is booleanly false as well. This way games doing the check:
-	 *
-	 *  if Engine.FeatureSupport.Foo then
-	 *
-	 * will be compatible even on engines that don't yet know about the entry at all. */
+	// entries live in LuaFeatureSupport.h (shared with Lua shader definition files)
 	lua_pushliteral(L, "FeatureSupport");
-	lua_createtable(L, 0, 16);
-		LuaPushNamedBool(L, "NegativeGetUnitCurrentCommand", true);
-		LuaPushNamedBool(L, "hasExitOnlyYardmaps", true);
-		LuaPushNamedNumber(L, "rmlUiApiVersion", 1);
-		LuaPushNamedBool(L, "noAutoShowMetal", false);
-		LuaPushNamedNumber(L, "maxPiecesPerModel", MAX_PIECES_PER_MODEL);
-		LuaPushNamedBool(L, "transformsInGL4", true);
-		LuaPushNamedNumber(L, "gunshipCruiseAltitudeMultiplier", 1.5f); // see https://github.com/beyond-all-reason/spring/issues/1028
-		LuaPushNamedBool(L, "noRefundForConstructionDecay", false);
-		LuaPushNamedBool(L, "noRefundForFactoryCancel", false);
-		LuaPushNamedBool(L, "noOffsetForFeatureID", false);
-		LuaPushNamedBool(L, "noHandicapForReclaim", true);
-		LuaPushNamedBool(L, "groupAddDoesntSelect", true);
-		LuaPushNamedBool(L, "deadTeamsKeepUnitLimit", false);
-		LuaPushNamedBool(L, "reliableLuaMapShaders", true);
-		LuaPushNamedBool(L, "nanoParticleUpdateCallin", true);
-		LuaPushNamedBool(L, "nanoParticlesGL4", true);
-		LuaPushNamedBool(L, "modelVertexColor", true);
-		LuaPushNamedBool(L, "losInfoTexCodes", true);
+	lua_createtable(L, 0, 20);
+		#define FS_BOOL(name, value)  LuaPushNamedBool(L, #name, value);
+		#define FS_NUM(name, value)   LuaPushNamedNumber(L, #name, value);
+		RECOIL_ENGINE_FEATURE_SUPPORT(FS_BOOL, FS_NUM, FS_NUM)
+		#undef FS_BOOL
+		#undef FS_NUM
 	lua_rawset(L, -3);
 
 	lua_pushliteral(L, "textColorCodes");

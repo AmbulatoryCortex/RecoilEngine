@@ -156,6 +156,7 @@ void SMFRenderStateGLSL::Update(
 			glslShaders[n]->SetUniform("heightMapTex",           1);
 			glslShaders[n]->SetUniform("detailTex",              2);
 			glslShaders[n]->SetUniform("infoTex",               14);
+			glslShaders[n]->SetUniform("infoGradeTex",          20);
 			if (isAdv) {
 				glslShaders[n]->SetUniform("shadowTex", 4);
 				glslShaders[n]->SetUniform("normalsTex", 5);
@@ -258,6 +259,7 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, smfMap->GetHeightMapTexture());
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, smfMap->GetDetailTexture());
 	glActiveTexture(GL_TEXTURE14); glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
+	glActiveTexture(GL_TEXTURE20); glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetLosGradeTexture());
 	if (isAdv) {
 		glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, smfMap->GetNormalsTexture());
 		glActiveTexture(GL_TEXTURE6); glBindTexture(GL_TEXTURE_2D, smfMap->GetSpecularTexture());
@@ -323,6 +325,7 @@ void SMFRenderStateGLSL::Disable(const CSMFGroundDrawer* smfGroundDrawer, const 
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE14); glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE20); glBindTexture(GL_TEXTURE_2D, 0);
 
 	if (isAdv) {
 		glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, 0);

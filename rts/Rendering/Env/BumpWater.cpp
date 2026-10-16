@@ -496,6 +496,7 @@ void CBumpWater::InitResources(bool loadShader)
 		waterShader->SetUniform("waverand"      , 8 );
 		waterShader->SetUniform("shadowmap"     , 9 );
 		waterShader->SetUniform("infotex"       , 10);
+		waterShader->SetUniform("infoGradeTex"  , 12);
 		waterShader->SetUniform("shadowColorTex", 11);
 		waterShader->SetUniform("windVector"    , 15.0f, 15.0f);
 
@@ -951,6 +952,7 @@ void CBumpWater::Draw()
 	glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, waveRandTexture);
 	//glActiveTexture(GL_TEXTURE9); see above
 	glActiveTexture(GL_TEXTURE10); glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
+	glActiveTexture(GL_TEXTURE12); glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetLosGradeTexture());
 	//glActiveTexture(GL_TEXTURE11); see above
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, normalTexture);
 

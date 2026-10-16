@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaShaderContainer.h"
+#include "Lua/LuaFeatureSupport.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Lua/LuaUnsyncedCtrl.h"
@@ -177,11 +178,17 @@ bool LoadFromLua(Shader::IProgramObject* program, const std::string& filename)
 	p.PushFunc(LuaVFS::PushUnsynced);
 	p.EndTable();
 
-	// minimal Engine.FeatureSupport, so info-texture shaders can pick a format
-	// (keep in sync with LuaConstEngine)
+	// Engine.FeatureSupport (same list as LuaConstEngine), so shader
+	// definition files such as infoLOS.lua can pick a format
 	p.GetTable("Engine");
 	p.GetTable("FeatureSupport");
-	p.AddBool("losInfoTexCodes", true);
+	#define FS_BOOL(name, value)  p.AddBool(#name, value);
+	#define FS_INT(name, value)   p.AddInt(#name, value);
+	#define FS_FLOAT(name, value) p.AddFloat(#name, value);
+	RECOIL_ENGINE_FEATURE_SUPPORT(FS_BOOL, FS_INT, FS_FLOAT)
+	#undef FS_BOOL
+	#undef FS_INT
+	#undef FS_FLOAT
 	p.EndTable();
 	p.EndTable();
 

@@ -34,6 +34,7 @@ public:
 	const std::vector<std::string> GetModes() const override;
 
 	GLuint GetCurrentInfoTexture() const override;
+	GLuint GetLosGradeTexture() const override;
 	int2 GetCurrentInfoTextureSize() const override;
 
 public:
@@ -74,6 +75,7 @@ public:
 	const std::vector<std::string> GetModes() const override { return std::vector<std::string>(); };
 
 	GLuint GetCurrentInfoTexture() const override { return 0; }
+	GLuint GetLosGradeTexture() const override { return 0; }
 	int2 GetCurrentInfoTextureSize() const override { return int2{ 1, 1 }; }
 
 public:

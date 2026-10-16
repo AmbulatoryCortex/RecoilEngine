@@ -13,11 +13,30 @@
 #include "System/Misc/TracyDefs.h"
 
 
+namespace {
+	// exposes the combiner's decoded LOS factors to Lua as "$info:losgrade"
+	// (r = luminance mul, g = saturation mul, b = jam; r < 0.25: not coded)
+	class CLosGradeInfoTexture : public CModernInfoTexture {
+	public:
+		explicit CLosGradeInfoTexture(const CInfoTextureCombiner* c)
+			: CModernInfoTexture("losgrade"), combiner(c)
+		{ texSize = c->GetTexSize(); }
+
+		GLuint GetTexture() override { return combiner->GetLosGradeTexture(); }
+		void Update() override {}
+		bool IsUpdateNeeded() override { return false; }
+	private:
+		const CInfoTextureCombiner* combiner;
+	};
+}
+
+
 
 
 CInfoTextureHandler::CInfoTextureHandler()
 {
 	AddInfoTexture(infoTex = new CInfoTextureCombiner());
+	AddInfoTexture(new CLosGradeInfoTexture(infoTex));
 	AddInfoTexture(new CLosTexture());
 	AddInfoTexture(new CAirLosTexture());
 	AddInfoTexture(new CMetalTexture());
@@ -133,6 +152,11 @@ bool CInfoTextureHandler::HasMode(const std::string& name) const
 	return infoTextures.contains(name);
 }
 
+
+GLuint CInfoTextureHandler::GetLosGradeTexture() const
+{
+	return (infoTex->GetLosGradeTexture());
+}
 
 GLuint CInfoTextureHandler::GetCurrentInfoTexture() const
 {
