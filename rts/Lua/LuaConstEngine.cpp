@@ -32,6 +32,7 @@
  * @field nanoParticleUpdateCallin boolean Whether LuaUI receives batched `NanoParticleUpdate` lifecycle events
  * @field nanoParticlesGL4 boolean Whether the engine has the standalone shader-based nano particle effect (the `NanoParticles*` springsettings)
  * @field modelVertexColor boolean Whether glTF `COLOR_0` is loaded into the models VBO (`color`, attribute 15; opaque white when absent)
+ * @field losInfoTexCodes boolean Whether "los" mode decodes explicit level codes from the game's infoLOS shader (R level 0/1/3/2/3/1, G jam, B=1 marker) and grades by the InfoTexStrength springsetting. Also exposed to info-texture Lua shaders as `Engine.FeatureSupport.losInfoTexCodes`
  */
 
 /***
@@ -91,6 +92,7 @@ bool LuaConstEngine::PushEntries(lua_State* L)
 		LuaPushNamedBool(L, "nanoParticleUpdateCallin", true);
 		LuaPushNamedBool(L, "nanoParticlesGL4", true);
 		LuaPushNamedBool(L, "modelVertexColor", true);
+		LuaPushNamedBool(L, "losInfoTexCodes", true);
 	lua_rawset(L, -3);
 
 	lua_pushliteral(L, "textColorCodes");

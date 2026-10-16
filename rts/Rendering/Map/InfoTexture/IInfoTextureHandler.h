@@ -5,6 +5,7 @@
 #include "Rendering/GL/myGL.h"
 #include "System/type2.h"
 #include <string>
+#include <cstdint>
 #include <memory>
 
 
@@ -66,6 +67,12 @@ public:
 public:
 	virtual const CInfoTexture* GetInfoTextureConst(const std::string& name) const = 0;
 	virtual       CInfoTexture* GetInfoTexture     (const std::string& name)       = 0;
+
+private:
+	// per-draw-frame cache for SetLosGradeUniforms
+	mutable uint32_t losGradeCacheFrame = ~0u;
+	mutable float losGradeCacheStrength = 1.0f;
+	mutable float losGradeCacheEnabled = 0.0f;
 };
 
 extern std::unique_ptr<IInfoTextureHandler> infoTextureHandler;

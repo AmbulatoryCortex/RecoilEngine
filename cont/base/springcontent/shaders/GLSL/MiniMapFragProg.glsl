@@ -18,16 +18,19 @@ out vec4 fragColor;
 /***********************************************************************/
 // LOS info-texture grade (explicit level codes)
 //
-// In "los" mode a game's infoLOS shader that writes explicit codes stores:
-//   R  intel level code, max() over the levels a texel has:
-//        0 fog, 1/3 radar, 2/3 air-only LOS, 1 ground LOS
-//      (there is no never-seen state; fog is the lowest level)
+// In "los" mode a game's infoLOS shader that writes explicit codes stores,
+// per texel, with no temporal blending:
+//   R  intel level code, exactly one of 0 fog, 1/3 radar, 2/3 air-only LOS,
+//      1 ground LOS (the max() over the levels present at that texel;
+//      there is no never-seen state)
 //   G  jammer coverage, 0..1, independent of the level
-//   B  format marker, 1. A texel with B < 0.75 is a legacy gray overlay
-//      and keeps the old additive formula.
-// Codes are linear, so bilinear filtering and the combiner's temporal blend
-// land between two adjacent levels and decode to a value between their
-// factors, never to a third level.
+//   B  format marker, 1. If any texel of the 2x2 footprint has B < 0.75 the
+//      caller keeps the legacy additive formula.
+// The code must not be filtered before decoding (a fog-to-ground edge would
+// pass through 1/3 and 2/3 and draw fake radar/air bands), so the 2x2
+// footprint is fetched with texelFetch at LOD 0, each texel is decoded to
+// its factors, and the factors are bilinearly blended. That is the only
+// smoothing; edges fade between the two real levels.
 //
 // Per-level factors (luminance multiplier, saturation multiplier, blue add):
 //   ground 1.00 1.00 +0.00   air 0.88 0.85 +0.00
@@ -46,28 +49,52 @@ const vec4  LOSG_BLUE  = vec4(0.02, 0.01, 0.00, 0.00);
 const float LOSG_FLOOR = 0.06;
 const float LOSG_JAM   = 0.92;
 
-bool LosGradeIsCoded(vec3 info) { return (info.b >= 0.75); }
-
 float LosGradeJamPhase(vec2 worldXZ, float t) {
 	return dot(worldXZ, vec2(0.012, 0.009)) - t * 0.40;
 }
 
-vec3 LosGradeApply(vec3 col, vec3 info, float strength, float jamPhase) {
+// one unfiltered texel -> vec4(lumMul, satMul, blueAdd, jam), unscaled
+vec4 LosGradeDecodeTexel(vec3 texel) {
+	float level = floor(clamp(texel.r, 0.0, 1.0) * 3.0 + 0.5);
+	vec4 sel = vec4(equal(vec4(level), vec4(0.0, 1.0, 2.0, 3.0)));
+	return vec4(dot(sel, LOSG_LUM), dot(sel, LOSG_SAT), dot(sel, LOSG_BLUE), clamp(texel.g, 0.0, 1.0));
+}
+
+// Decode the 2x2 texel footprint of uv, then blend the decoded factors.
+// Returns false when the texture does not hold explicit codes.
+bool LosGradeFetch(sampler2D tex, vec2 uv, out vec4 factors) {
+	ivec2 size = textureSize(tex, 0);
+	ivec2 maxi = size - ivec2(1);
+	vec2 st = uv * vec2(size) - vec2(0.5);
+	vec2 w = fract(st);
+	ivec2 i0 = ivec2(floor(st));
+
+	vec3 t00 = texelFetch(tex, clamp(i0              , ivec2(0), maxi), 0).rgb;
+	vec3 t10 = texelFetch(tex, clamp(i0 + ivec2(1, 0), ivec2(0), maxi), 0).rgb;
+	vec3 t01 = texelFetch(tex, clamp(i0 + ivec2(0, 1), ivec2(0), maxi), 0).rgb;
+	vec3 t11 = texelFetch(tex, clamp(i0 + ivec2(1, 1), ivec2(0), maxi), 0).rgb;
+
+	factors = vec4(1.0, 1.0, 0.0, 0.0);
+	if (min(min(t00.b, t10.b), min(t01.b, t11.b)) < 0.75)
+		return false;
+
+	factors = mix(
+		mix(LosGradeDecodeTexel(t00), LosGradeDecodeTexel(t10), w.x),
+		mix(LosGradeDecodeTexel(t01), LosGradeDecodeTexel(t11), w.x),
+		w.y
+	);
+	return true;
+}
+
+vec3 LosGradeApply(vec3 col, vec4 factors, float strength, float jamPhase) {
 	strength = clamp(strength, 0.0, 1.25);
 
-	// how far the code reaches into radar, air and ground (each 0..1)
-	vec3 reach = clamp(vec3(clamp(info.r, 0.0, 1.0) * 3.0) - vec3(0.0, 1.0, 2.0), 0.0, 1.0);
+	float jamMul = mix(1.0, LOSG_JAM * (0.97 + 0.03 * sin(jamPhase)), factors.w);
 
-	float lumMul = LOSG_LUM.x  + dot(reach, LOSG_LUM.yzw  - LOSG_LUM.xyz );
-	float satMul = LOSG_SAT.x  + dot(reach, LOSG_SAT.yzw  - LOSG_SAT.xyz );
-	float blue   = LOSG_BLUE.x + dot(reach, LOSG_BLUE.yzw - LOSG_BLUE.xyz);
-
-	float jamMul = mix(1.0, LOSG_JAM * (0.97 + 0.03 * sin(jamPhase)), clamp(info.g, 0.0, 1.0));
-
-	lumMul = 1.0 + (lumMul - 1.0) * strength;
-	satMul = 1.0 + (satMul - 1.0) * strength;
+	float lumMul = 1.0 + (factors.x - 1.0) * strength;
+	float satMul = 1.0 + (factors.y - 1.0) * strength;
+	float blue   = factors.z * strength;
 	jamMul = 1.0 + (jamMul - 1.0) * strength;
-	blue  *= strength;
 
 	float lum0 = dot(col, LOSG_LUMA);
 	vec3 graded = mix(vec3(lum0), col, satMul) * (lumMul * jamMul);
@@ -87,9 +114,10 @@ void main()
 
 	fragColor = shadingColor * minimapColor;
 
-	if (infotexMul > 0.0 && infoLosGrade > 0.5 && LosGradeIsCoded(infoSample.rgb)) {
+	vec4 losFactors;
+	if (infotexMul > 0.0 && infoLosGrade > 0.5 && LosGradeFetch(infomapTex, vTexCoords * uvMult, losFactors)) {
 		// minimap is ~200x smaller than the world; slow the jam pulse in uv space
-		fragColor.rgb = LosGradeApply(fragColor.rgb, infoSample.rgb, infoStrength, LosGradeJamPhase(vTexCoords * 1024.0, infoAnimTime));
+		fragColor.rgb = LosGradeApply(fragColor.rgb, losFactors, infoStrength, LosGradeJamPhase(vTexCoords * 1024.0, infoAnimTime));
 	} else {
 		fragColor += ((infoSample - vec4(0.5)) * infotexMul);
 	}

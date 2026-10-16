@@ -177,6 +177,14 @@ bool LoadFromLua(Shader::IProgramObject* program, const std::string& filename)
 	p.PushFunc(LuaVFS::PushUnsynced);
 	p.EndTable();
 
+	// minimal Engine.FeatureSupport, so info-texture shaders can pick a format
+	// (keep in sync with LuaConstEngine)
+	p.GetTable("Engine");
+	p.GetTable("FeatureSupport");
+	p.AddBool("losInfoTexCodes", true);
+	p.EndTable();
+	p.EndTable();
+
 	if (!p.Execute()) {
 		LOG_L(L_ERROR, "Failed to parse lua shader \"%s\": %s", filename.c_str(), p.GetErrorLog().c_str());
 		return false;

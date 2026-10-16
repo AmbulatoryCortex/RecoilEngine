@@ -46,9 +46,15 @@ void IInfoTextureHandler::Create()
 void IInfoTextureHandler::SetLosGradeUniforms(Shader::IProgramObject* shader) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	const float strength = std::clamp(configHandler->GetFloat("InfoTexStrength"), 0.0f, 1.25f);
+	// ground, grass, decals, minimap and water all call this every frame;
+	// do the config and mode (string compare) lookups once per draw frame
+	if (losGradeCacheFrame != globalRendering->drawFrame) {
+		losGradeCacheFrame = globalRendering->drawFrame;
+		losGradeCacheStrength = std::clamp(configHandler->GetFloat("InfoTexStrength"), 0.0f, 1.25f);
+		losGradeCacheEnabled = InLosMode() ? 1.0f : 0.0f;
+	}
 
-	shader->SetUniform("infoLosGrade", InLosMode() ? 1.0f : 0.0f);
-	shader->SetUniform("infoStrength", strength);
+	shader->SetUniform("infoLosGrade", losGradeCacheEnabled);
+	shader->SetUniform("infoStrength", losGradeCacheStrength);
 	shader->SetUniform("infoAnimTime", (gu != nullptr) ? gu->gameTime : 0.0f);
 }
