@@ -822,6 +822,7 @@ void CGroundDecalHandler::Draw()
 	}
 
 	decalShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	infoTextureHandler->SetLosGradeUniforms(decalShader);
 	decalShader->SetUniform("curAdjustedFrame", std::max(gs->frameNum, 0) + globalRendering->timeOffset);
 	if (shadowHandler.ShadowsLoaded())
 		decalShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());

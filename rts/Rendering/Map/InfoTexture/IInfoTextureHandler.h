@@ -9,6 +9,7 @@
 
 
 class CInfoTexture;
+namespace Shader { struct IProgramObject; }
 
 
 class IInfoTextureHandler {
@@ -50,6 +51,14 @@ public:
 	virtual void ToggleMode(const std::string& name) = 0;
 	virtual const std::string& GetMode() const = 0;
 	virtual const std::vector<std::string> GetModes() const = 0;
+
+	// True when the active mode is "los". Shaders then grade the scene from
+	// the explicit LOS level codes (see SMFFragProg.glsl, LosGradeApply).
+	bool InLosMode() const { return (IsEnabled() && GetMode() == "los"); }
+
+	// Sets infoLosGrade, infoStrength (springsetting InfoTexStrength) and
+	// infoAnimTime on an enabled shader that samples the info texture.
+	void SetLosGradeUniforms(Shader::IProgramObject* shader) const;
 
 	virtual GLuint GetCurrentInfoTexture() const = 0;
 	virtual int2   GetCurrentInfoTextureSize() const = 0;

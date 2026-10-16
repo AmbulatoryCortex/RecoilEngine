@@ -931,6 +931,7 @@ void CBumpWater::Draw()
 	waterShader->Enable();
 	waterShader->SetUniform("eyePos", camera->GetPos().x, camera->GetPos().y, camera->GetPos().z);
 	waterShader->SetUniform("frame", (gs->frameNum + globalRendering->timeOffset) / 15000.0f);
+	infoTextureHandler->SetLosGradeUniforms(waterShader);
 
 	if (shadowHandler.ShadowsLoaded()) {
 		waterShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());

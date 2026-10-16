@@ -366,6 +366,7 @@ void CGrassDrawer::EnableShader(const GrassShaderProgram type) {
 	grassShader->SetUniform3v("camRight",  &camera->GetRight().x);
 
 	grassShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	infoTextureHandler->SetLosGradeUniforms(grassShader);
 	grassShader->SetUniform("groundShadowDensity", sunLighting->groundShadowDensity);
 	grassShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());
 	grassShader->SetUniform4v("shadowParams", &shadowHandler.GetShadowParams().x);

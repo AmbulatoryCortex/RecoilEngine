@@ -59,14 +59,11 @@ uniform vec2 specularTexGen; // 1.0/mapSize
 
 uniform sampler2D infoTex;
 uniform float infoTexIntensityMul;
-// 0 .. 1.25 (springsetting InfoTexStrength, default 1). Scales each LOS
-// factor's distance from 1, so 0 leaves albedo alone and 1.25 exaggerates.
-uniform float infoStrength;
-// Seconds (gu->gameTime). Only the jamming luminance pattern uses it.
-uniform float infoAnimTime;
-// 1 when the active info-texture mode is "los". Height/path stay on the
-// legacy additive formula even though they also use infoTexIntensityMul == 1.
+// LOS grade (see LosGradeApply). infoLosGrade is 1 in "los" mode,
+// infoStrength is InfoTexStrength, infoAnimTime is game seconds.
 uniform float infoLosGrade;
+uniform float infoStrength;
+uniform float infoAnimTime;
 uniform vec2 infoTexGen;     // 1.0/(pwr2map{x,z} * SQUARE_SIZE)
 
 #ifdef SMF_SPECULAR_LIGHTING
@@ -265,276 +262,65 @@ vec4 GetSplatDetailTextureNormal(vec2 uv, out vec2 splatDetailStrength) {
 #endif // SMF_ADV_SHADING
 
 /***********************************************************************/
-// LOS info-texture grade
+// LOS info-texture grade (explicit level codes)
 //
-// Legacy LOS mode did `diffuse += info - 0.5`. That is an absolute offset,
-// so a dark albedo (0.05) loses most of its value while a bright one barely
-// moves. This path replaces that offset with per-level multipliers.
+// In "los" mode a game's infoLOS shader that writes explicit codes stores:
+//   R  intel level code, max() over the levels a texel has:
+//        0 fog, 1/3 radar, 2/3 air-only LOS, 1 ground LOS
+//      (there is no never-seen state; fog is the lowest level)
+//   G  jammer coverage, 0..1, independent of the level
+//   B  format marker, 1. A texel with B < 0.75 is a legacy gray overlay
+//      and keeps the old additive formula.
+// Codes are linear, so bilinear filtering and the combiner's temporal blend
+// land between two adjacent levels and decode to a value between their
+// factors, never to a third level.
 //
-// There is no never-seen state. The darkest intel is fog; anything at or
-// below the fog center is fog, anything at or above ground LOS is ground.
-//
-// Two encodings of the same four levels can show up in a sampled texel.
-//
-// DIRECT centers (the levels this prototype was asked to recognize), as the
-// gray value stored in the info texture:
-//   fog 0.44, radar 0.46, air-only 0.52, ground LOS 0.60
-//
-// BLENDED centers are what Beyond All Reason actually stores today.
-//   luaui/Widgets/gfx_los_colors.lua at default opacity 0.66 writes
-//     fog   (alwaysColor) = 0.40 * 0.66           = 0.264
-//     radar (radarColor2) = 0.40 * lerp(0.66,1,.5) = 0.332
-//     los                 = 0.60                   (not scaled by opacity)
-//     jam                 = (0.03, -0.03, -0.03)
-//   shaders/GLSL/infoLOS.lua (the game's copy, not this repo's) then does
-//     color = max(fog, radar2 * radar, los * mix(groundLos, airLos, 0.2))
-//     color += jam * jamming
-//     alpha = 0.03
-//   Air-only (groundLos = 0, airLos = 1) is los * 0.2 = 0.12, which loses
-//   the max() to fog, so current BAR does not emit a distinct air-only gray.
-//   The only intermediate between radar (~0.33) and full LOS (0.60) is
-//   ground-without-air: 0.60 * mix(1, 0, 0.2) = 0.48. That sample is graded
-//   as air-only (the requested ~0.52). Full coverage of both LOS textures
-//   stays 0.60 and is ground.
-//   CInfoTextureCombiner clears the target to 0.5 and blends
-//   SRC_ALPHA, ONE_MINUS_SRC_ALPHA, so the stored texel is
-//   mix(0.5, color, 0.03) and every level lands near 0.49..0.51.
-//   RGB10 plus that 0.03 scale leaves fog and radar about two code points
-//   apart; mip filtering averages them further. Anchors assume opacity 0.66
-//   and shift if the player changes the LOS opacity slider (los itself does
-//   not move; fog and radar do).
-//
-// A texel inside (0.480, 0.520) is un-blended with alpha 0.03 and classified
-// on the BAR centers, unless that reconstruction falls outside the BAR color
-// range (a sample near 0.51 un-blends above 0.75 and stays on the direct
-// scale; 0.52 itself is already outside the envelope). Otherwise the direct
-// centers are used.
-//
-// Jamming is not a fifth level and is not added as color. BAR's tint is
-// +R -G -B with G ~ B. That excess is stripped before the gray is measured,
-// then applied here as a luminance multiply of about 0.92 (-8%) plus a slow
-// world-space sine. The diagonal fog lines are not drawn by the engine.
-// BAR draws them in screen space from
-//   luaui/Widgets/gfx_fog_diaglines_gl4.lua
-//   luaui/Shaders/fog_diaglines.frag.glsl
-// (moved out of the game's infoLOS.lua; this repo's infoLOS.lua never had
-// them). They composite on top of this grade and are left alone.
-//
-// Each claimed level proposes a factor. Overlapping claims (the middle half
-// of the gap between two adjacent centers, and any filtered texel that still
-// lands in that band) resolve with max() of the factors, so the higher intel
-// wins the border. Filtering that already averaged two colors into a third
-// gray cannot be undone from one sample; that gray is classified as whichever
-// center it landed on.
-//
-// Factors, then infoStrength: f' = 1 + (f - 1) * infoStrength.
-//   ground LOS  lum 1.00  sat 1.00
-//   air-only    lum 0.88  sat 0.85
-//   radar       lum 0.72  sat 0.65  blue +0.01
-//   fog         lum 0.52  sat 0.45  blue +0.02  albedo-luminance floor 0.06
-// RGB is scaled by one multiplier (hue kept). Saturation is mixed toward the
-// Rec.709 luminance before that scale. Nothing is clamped per channel.
-// The fog floor is applied to albedo, before lighting, by scaling RGB
-// together. Non-LOS modes (mul != 1, or infoLosGrade == 0, or a texel that
-// is not one of these grays) keep the old additive formula.
+// Per-level factors (luminance multiplier, saturation multiplier, blue add):
+//   ground 1.00 1.00 +0.00   air 0.88 0.85 +0.00
+//   radar  0.72 0.65 +0.01   fog 0.52 0.45 +0.02
+// infoStrength (springsetting InfoTexStrength, 0..1.25) scales each factor's
+// distance from neutral: f' = 1 + (f - 1) * strength. RGB is scaled
+// together (hue kept); luminance never drops below min(0.06, original).
+// Jam multiplies luminance by ~0.92 with a slow +/-3% world-space pulse.
+// Keep in sync: SMFFragProg, GrassFragProg, GroundDecalsFragProg,
+// MiniMapFragProg, BumpWaterFS.
 
-const vec3 LOS_LUMA = vec3(0.2126, 0.7152, 0.0722);
-const vec4 LOS_DIRECT_CENTERS = vec4(0.44, 0.46, 0.52, 0.60);
-const vec4 LOS_BAR_CENTERS    = vec4(0.264, 0.332, 0.480, 0.600);
-const float LOS_BLEND_ALPHA   = 0.03;
-// Order is fog, radar, air-only, ground.
-const vec4 LOS_LUM  = vec4(0.52, 0.72, 0.88, 1.00);
-const vec4 LOS_SAT  = vec4(0.45, 0.65, 0.85, 1.00);
-const vec4 LOS_BLUE = vec4(0.02, 0.01, 0.00, 0.00);
+const vec3  LOSG_LUMA  = vec3(0.2126, 0.7152, 0.0722);
+const vec4  LOSG_LUM   = vec4(0.52, 0.72, 0.88, 1.00); // fog, radar, air, ground
+const vec4  LOSG_SAT   = vec4(0.45, 0.65, 0.85, 1.00);
+const vec4  LOSG_BLUE  = vec4(0.02, 0.01, 0.00, 0.00);
+const float LOSG_FLOOR = 0.06;
+const float LOSG_JAM   = 0.92;
 
-float InfoScaleFromNeutral(float factor, float strength)
-{
-	return 1.0 + (factor - 1.0) * strength;
+bool LosGradeIsCoded(vec3 info) { return (info.b >= 0.75); }
+
+float LosGradeJamPhase(vec2 worldXZ, float t) {
+	return dot(worldXZ, vec2(0.012, 0.009)) - t * 0.40;
 }
 
-void LosLevelWeights(float level, vec4 centers, out vec4 w)
-{
-	float gap;
-	float mid;
-	float share;
+vec3 LosGradeApply(vec3 col, vec3 info, float strength, float jamPhase) {
+	strength = clamp(strength, 0.0, 1.25);
 
-	w = vec4(0.0);
-	if (level <= centers.x) {
-		w.x = 1.0;
-		return;
-	}
-	if (level >= centers.w) {
-		w.w = 1.0;
-		return;
-	}
+	// how far the code reaches into radar, air and ground (each 0..1)
+	vec3 reach = clamp(vec3(clamp(info.r, 0.0, 1.0) * 3.0) - vec3(0.0, 1.0, 2.0), 0.0, 1.0);
 
-	// fog .. radar
-	gap = centers.y - centers.x;
-	mid = 0.5 * (centers.x + centers.y);
-	share = 0.25 * gap;
-	if (level <= centers.y) {
-		if (level < mid - share)
-			w.x = 1.0;
-		else if (level > mid + share)
-			w.y = 1.0;
-		else {
-			w.x = 1.0;
-			w.y = 1.0;
-		}
-		return;
-	}
+	float lumMul = LOSG_LUM.x  + dot(reach, LOSG_LUM.yzw  - LOSG_LUM.xyz );
+	float satMul = LOSG_SAT.x  + dot(reach, LOSG_SAT.yzw  - LOSG_SAT.xyz );
+	float blue   = LOSG_BLUE.x + dot(reach, LOSG_BLUE.yzw - LOSG_BLUE.xyz);
 
-	// radar .. air-only
-	gap = centers.z - centers.y;
-	mid = 0.5 * (centers.y + centers.z);
-	share = 0.25 * gap;
-	if (level <= centers.z) {
-		if (level < mid - share)
-			w.y = 1.0;
-		else if (level > mid + share)
-			w.z = 1.0;
-		else {
-			w.y = 1.0;
-			w.z = 1.0;
-		}
-		return;
-	}
+	float jamMul = mix(1.0, LOSG_JAM * (0.97 + 0.03 * sin(jamPhase)), clamp(info.g, 0.0, 1.0));
 
-	// air-only .. ground
-	gap = centers.w - centers.z;
-	mid = 0.5 * (centers.z + centers.w);
-	share = 0.25 * gap;
-	if (level < mid - share)
-		w.z = 1.0;
-	else if (level > mid + share)
-		w.w = 1.0;
-	else {
-		w.z = 1.0;
-		w.w = 1.0;
-	}
-}
+	lumMul = 1.0 + (lumMul - 1.0) * strength;
+	satMul = 1.0 + (satMul - 1.0) * strength;
+	jamMul = 1.0 + (jamMul - 1.0) * strength;
+	blue  *= strength;
 
-// Strip BAR's jam tint (+R, -G, -B, G ~ B) and return the gray intel level.
-// `blended` selects the post-combiner scale (the tint was multiplied by alpha).
-void SeparateLosJam(vec3 info, bool blended, out float jam, out float gray)
-{
-	float gb = 0.5 * (info.g + info.b);
-	float rg = info.r - info.g;
-	float rb = info.r - info.b;
-	float gbDelta = abs(info.g - info.b);
-	float gbTol = blended ? 0.004 : 0.03;
-	// Full jam is 0.06 of R-G in shader space, ~0.0018 after the 0.03 blend
-	// (about two RGB10 steps). Ignore a single code point or the grade
-	// flickers. Partial jam below that floor is not recoverable once blended.
-	// A larger split is some other overlay, not jamming.
-	float rgFull = blended ? (0.06 * LOS_BLEND_ALPHA) : 0.06;
-	float rgMin = blended ? 0.0015 : 0.015;
-	float rgMax = blended ? 0.01 : 0.12;
-	bool jamLike = (gbDelta <= gbTol) && (rg >= rgMin) && (rb >= rgMin) && (rg <= rgMax) && (rb <= rgMax);
-
-	jam = jamLike ? clamp(rg / rgFull, 0.0, 1.0) : 0.0;
-	gray = jamLike ? (gb + (0.5 * rgFull) * jam) : dot(info, vec3(1.0 / 3.0));
-}
-
-bool DecodeLosGrade(vec3 info, float strength, vec2 worldXZ, inout vec3 graded)
-{
-	float chroma = max(info.r, max(info.g, info.b)) - min(info.r, min(info.g, info.b));
-	float mean = dot(info, vec3(1.0 / 3.0));
-	bool inEnvelope = (mean > 0.480) && (mean < 0.520);
-
-	float jam;
-	float gray;
-	SeparateLosJam(info, inEnvelope, jam, gray);
-
-	bool blended = false;
-	float level = gray;
-	if (inEnvelope) {
-		float shaderGray = 0.5 + (gray - 0.5) / LOS_BLEND_ALPHA;
-		// A direct sample just under 0.52 un-blends to ~1.1 and is rejected,
-		// so it stays on the direct scale. Exactly 0.52 is outside the envelope.
-		if ((shaderGray >= -0.02) && (shaderGray <= 0.75)) {
-			blended = true;
-			level = shaderGray;
-		}
-	}
-
-	if (blended) {
-		if ((jam == 0.0) && (chroma > 0.02))
-			return false;
-		if ((level < -0.02) || (level > LOS_BAR_CENTERS.w + 0.08))
-			return false;
-	} else {
-		if ((jam == 0.0) && (chroma > 0.08))
-			return false;
-		if ((level < LOS_DIRECT_CENTERS.x - 0.04) || (level > LOS_DIRECT_CENTERS.w + 0.05))
-			return false;
-	}
-
-	vec4 centers = blended ? LOS_BAR_CENTERS : LOS_DIRECT_CENTERS;
-	vec4 w;
-	LosLevelWeights(level, centers, w);
-
-	float lumMul = 0.0;
-	float satMul = 1.0;
-	float blue = 0.0;
-	bool fogWon = false;
-
-	// max() of the claimed factors. Lum (and sat) increase with intel, so the
-	// highest claim also donates that level's saturation and blue tint.
-	if (w.x > 0.0) {
-		lumMul = InfoScaleFromNeutral(LOS_LUM.x, strength);
-		satMul = InfoScaleFromNeutral(LOS_SAT.x, strength);
-		blue = LOS_BLUE.x;
-		fogWon = true;
-	}
-	if (w.y > 0.0) {
-		float lum = InfoScaleFromNeutral(LOS_LUM.y, strength);
-		if (lum >= lumMul) {
-			lumMul = lum;
-			satMul = InfoScaleFromNeutral(LOS_SAT.y, strength);
-			blue = LOS_BLUE.y;
-			fogWon = false;
-		}
-	}
-	if (w.z > 0.0) {
-		float lum = InfoScaleFromNeutral(LOS_LUM.z, strength);
-		if (lum >= lumMul) {
-			lumMul = lum;
-			satMul = InfoScaleFromNeutral(LOS_SAT.z, strength);
-			blue = LOS_BLUE.z;
-			fogWon = false;
-		}
-	}
-	if (w.w > 0.0) {
-		float lum = InfoScaleFromNeutral(LOS_LUM.w, strength);
-		if (lum >= lumMul) {
-			lumMul = lum;
-			satMul = InfoScaleFromNeutral(LOS_SAT.w, strength);
-			blue = LOS_BLUE.w;
-			fogWon = false;
-		}
-	}
-
-	float lum = dot(graded, LOS_LUMA);
-	graded = mix(vec3(lum), graded, satMul);
-	graded *= lumMul;
-
-	// -8% luminance, then a slow +/-3% world-space pulse. Scaled like the
-	// other factors: distance from 1 moves with infoStrength.
-	float phase = dot(worldXZ, vec2(0.012, 0.009)) - infoAnimTime * 0.40;
-	float pattern = 0.97 + 0.03 * sin(phase);
-	float jamFactor = mix(1.0, 0.92 * pattern, jam);
-	graded *= InfoScaleFromNeutral(jamFactor, strength);
-
-	if (fogWon) {
-		float fogLum = dot(graded, LOS_LUMA);
-		float lifted = max(fogLum, 0.06);
-		float liftT = clamp(strength, 0.0, 1.0);
-		graded *= mix(1.0, lifted / max(fogLum, 1.0e-4), liftT);
-	}
-
-	graded.b += blue * strength;
-	return true;
+	float lum0 = dot(col, LOSG_LUMA);
+	vec3 graded = mix(vec3(lum0), col, satMul) * (lumMul * jamMul);
+	float lum1 = dot(graded, LOSG_LUMA);
+	graded *= max(lum1, min(LOSG_FLOOR, lum0)) / max(lum1, 1.0e-5);
+	graded.b += blue;
+	return graded;
 }
 
 /***********************************************************************/
@@ -633,26 +419,20 @@ void main() {
 		diffuseCol.rgb = mix(diffuseCol.rgb, reflectCol, reflectMod);
 	}
 	#endif
+	// The LOS grade is not applied in DEFERRED_MODE on purpose: the G-buffer
+	// diffuse is material albedo that Lua deferred passes (lights, SSAO, etc.)
+	// combine with the forward-shaded map, which is already graded here.
+	// Grading the G-buffer as well would apply the LOS factors twice.
 	#if !defined(DEFERRED_MODE) && defined(HAVE_INFOTEX)
 	{
 		vec3 infoSample = texture2D(infoTex, infoTexCoords).rgb;
-		// Metal and any other non-LOS mode keep the additive overlay.
-		// mul == 1 is the historical LOS-style path (the flat -0.5); height
-		// and path also land here, so infoLosGrade restricts the new grade
-		// to the "los" mode. A LOS texel that is not one of the known grays
-		// falls back to that same additive formula.
-		if (infoTexIntensityMul != 1.0) {
-			diffuseCol.rgb += infoSample * infoTexIntensityMul;
+		if (infoLosGrade > 0.5 && LosGradeIsCoded(infoSample)) {
+			// LOS codes grade the albedo multiplicatively (before lighting)
+			diffuseCol.rgb = LosGradeApply(diffuseCol.rgb, infoSample, infoStrength, LosGradeJamPhase(vertexWorldPos.xz, infoAnimTime));
 		} else {
-			vec3 graded = diffuseCol.rgb;
-			float strength = clamp(infoStrength, 0.0, 1.25);
-			bool gradedLos = (infoLosGrade > 0.5) && DecodeLosGrade(infoSample, strength, vertexWorldPos.xz, graded);
-			if (gradedLos)
-				diffuseCol.rgb = graded;
-			else {
-				diffuseCol.rgb += infoSample;
-				diffuseCol.rgb -= vec3(0.5);
-			}
+			// increase contrast and brightness for the overlays
+			diffuseCol.rgb += (infoSample * infoTexIntensityMul);
+			diffuseCol.rgb -= (vec3(0.5, 0.5, 0.5) * float(infoTexIntensityMul == 1.0));
 		}
 	}
 	#endif

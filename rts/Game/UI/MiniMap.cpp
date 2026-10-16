@@ -1884,6 +1884,7 @@ void CMiniMap::DrawBackground() const
 	readMap->BindMiniMapTextures();
 	bgShader->Enable();
 	bgShader->SetUniform("infotexMul", static_cast<float>(infoTextureHandler->IsEnabled()));
+	infoTextureHandler->SetLosGradeUniforms(bgShader);
 	rb.DrawElements(GL_TRIANGLES);
 	bgShader->Disable();
 
