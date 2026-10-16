@@ -840,6 +840,14 @@ void CSMFReadMap::BindMiniMapTextures() const
 	glBindTexture(GL_TEXTURE_2D, shadingTex.GetID());
 }
 
+void CSMFReadMap::UnbindMiniMapTextures() const
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
+}
+
 
 void CSMFReadMap::GridVisibility(CCamera* cam, IQuadDrawer* qd, float maxDist, int quadSize, int extraSize)
 {

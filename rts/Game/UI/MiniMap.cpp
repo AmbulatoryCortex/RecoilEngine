@@ -1888,6 +1888,7 @@ void CMiniMap::DrawBackground() const
 	infoTextureHandler->SetLosGradeUniforms(bgShader);
 	rb.DrawElements(GL_TRIANGLES);
 	bgShader->Disable();
+	readMap->UnbindMiniMapTextures();
 
 	//glMatrixMode(GL_PROJECTION);
 	glPopMatrix();

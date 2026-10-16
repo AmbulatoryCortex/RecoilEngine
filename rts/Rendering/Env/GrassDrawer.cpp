@@ -691,6 +691,10 @@ void CGrassDrawer::ResetGlStateNear()
 
 	grassShader->Disable();
 
+	glActiveTextureARB(GL_TEXTURE7_ARB);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTextureARB(GL_TEXTURE0_ARB);
+
 	if (shadowHandler.ShadowsLoaded()) {
 		glActiveTextureARB(GL_TEXTURE1_ARB);
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -751,6 +755,10 @@ void CGrassDrawer::ResetGlStateFar()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 	grassShader->Disable();
+
+	glActiveTextureARB(GL_TEXTURE7_ARB);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTextureARB(GL_TEXTURE0_ARB);
 
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();

@@ -24,6 +24,7 @@ public:
 	// decoded LOS grade factors: r = lum mul, g = sat mul, b = jam; r < 0.25
 	// means the game's infoLOS shader wrote legacy gray, not level codes
 	GLuint GetLosGradeTexture() const { return gradeTex.GetId(); }
+	GLuint GetLosCodeTexture() const { return codeTex.GetId(); }
 	const std::string& GetMode() const { return curMode; }
 	void SwitchMode(const std::string& name);
 

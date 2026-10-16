@@ -28,6 +28,21 @@ namespace {
 	private:
 		const CInfoTextureCombiner* combiner;
 	};
+
+	// exposes the raw, unfiltered LOS level codes to Lua as "$info:loscodes"
+	// (R level 0/.33/.67/1, G jam, B >= 0.75 coded); read with texelFetch
+	class CLosCodeInfoTexture : public CModernInfoTexture {
+	public:
+		explicit CLosCodeInfoTexture(const CInfoTextureCombiner* c)
+			: CModernInfoTexture("loscodes"), combiner(c)
+		{ texSize = c->GetTexSize(); }
+
+		GLuint GetTexture() override { return combiner->GetLosCodeTexture(); }
+		void Update() override {}
+		bool IsUpdateNeeded() override { return false; }
+	private:
+		const CInfoTextureCombiner* combiner;
+	};
 }
 
 
@@ -37,6 +52,7 @@ CInfoTextureHandler::CInfoTextureHandler()
 {
 	AddInfoTexture(infoTex = new CInfoTextureCombiner());
 	AddInfoTexture(new CLosGradeInfoTexture(infoTex));
+	AddInfoTexture(new CLosCodeInfoTexture(infoTex));
 	AddInfoTexture(new CLosTexture());
 	AddInfoTexture(new CAirLosTexture());
 	AddInfoTexture(new CMetalTexture());
