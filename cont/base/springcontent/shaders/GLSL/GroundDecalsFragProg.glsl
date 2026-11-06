@@ -394,7 +394,7 @@ const float EPS = 3e-3;
 // The blue add is a function of the level, rebuilt from r (piecewise linear).
 // infoStrength (springsetting InfoTexStrength, 0..1.25) scales each factor's
 // distance from neutral: f' = 1 + (f - 1) * strength. RGB is scaled
-// together (hue kept); luminance never drops below min(0.06, original).
+// together (hue kept); after grading, luminance is at least 0.06.
 // Jam multiplies luminance by ~0.92 with a slow +/-3% world-space pulse.
 // Keep in sync: SMFFragProg, GrassFragProg, GroundDecalsFragProg,
 // MiniMapFragProg, BumpWaterFS, and BAR's shaders/GLSL/include/losgrade.glsl.
@@ -433,7 +433,8 @@ vec3 LosGradeApply(vec3 col, vec4 factors, float strength, float jamPhase) {
 	float lum0 = dot(col, LOSG_LUMA);
 	vec3 graded = mix(vec3(lum0), col, satMul) * (lumMul * jamMul);
 	float lum1 = dot(graded, LOSG_LUMA);
-	graded *= max(lum1, min(LOSG_FLOOR, lum0)) / max(lum1, 1.0e-5);
+	// absolute floor: scale RGB together so luminance is at least LOSG_FLOOR
+	graded *= max(lum1, LOSG_FLOOR) / max(lum1, 1.0e-5);
 	graded.b += blue;
 	return graded;
 }
