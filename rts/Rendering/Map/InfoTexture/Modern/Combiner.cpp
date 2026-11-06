@@ -131,7 +131,10 @@ void CInfoTextureCombiner::CreateLosDecode()
 		in vec2 uv;
 		out vec4 fragData[2];
 
-		const vec4 LOS_LUM = vec4(0.52, 0.72, 0.88, 1.00); // fog, radar, air, ground
+		// Radar is 0.76 (was 0.72). Consumers ease the fog->radar segment so a
+		// thin ring mixed with fog still holds a band; fog stays 0.52.
+		// See SMFFragProg.glsl LosGradeHoldRadar.
+		const vec4 LOS_LUM = vec4(0.52, 0.76, 0.88, 1.00); // fog, radar, air, ground
 		const vec4 LOS_SAT = vec4(0.45, 0.65, 0.85, 1.00);
 
 		// upstream BAR infoLOS.lua HIGH_QUALITY getTexel (HighResInfoTexture
