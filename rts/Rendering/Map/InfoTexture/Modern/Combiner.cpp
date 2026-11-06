@@ -346,9 +346,13 @@ void CInfoTextureCombiner::DecodeLos()
 	decodeShader->SetUniform("losColor", gd->losColor[0] * scale, gd->losColor[1] * scale, gd->losColor[2] * scale);
 	decodeShader->SetUniform("radarColor2", gd->radarColor2[0] * scale, gd->radarColor2[1] * scale, gd->radarColor2[2] * scale);
 	decodeShader->SetUniform("jamColor", gd->jamColor[0] * scale, gd->jamColor[1] * scale, gd->jamColor[2] * scale);
-	// temporal smoothing of the *decoded* factors: no edge pop
-	// (the compat gray uses the upstream 0.03 blend in the shader)
-	decodeShader->SetUniform("blendAlpha", 0.15f);
+	// Temporal smoothing of the *decoded* factors (the compat gray keeps the
+	// upstream 0.03 blend written in the shader). gradeTex is cleared to fog
+	// and this pass runs at <=30Hz, so 0.15 took ~0.8s to get within 0.01 of
+	// a stable ground-LOS core and left it dingy, still carrying fog's
+	// saturation. 0.75 reaches that band in three updates (~0.1s). A moving
+	// edge still fades across those frames; it does not pop in one.
+	decodeShader->SetUniform("blendAlpha", 0.75f);
 
 	vao.Bind();
 	glDrawArrays(GL_TRIANGLES, 0, 3);
