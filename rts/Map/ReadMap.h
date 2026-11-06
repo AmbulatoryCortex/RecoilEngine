@@ -135,6 +135,7 @@ public:
 
 	/// binds textures used to draw the minimap in a quad with extents (0,0)-(1,1))
 	virtual void BindMiniMapTextures() const = 0;
+	virtual void UnbindMiniMapTextures() const {}
 
 	/// Feature creation
 	virtual int GetNumFeatures() = 0;

@@ -122,6 +122,7 @@ public:
 	const MapTexture& GetHeightMapTextureObj() const override { return heightMapTexture; }
 public:
 	void BindMiniMapTextures() const override;
+	void UnbindMiniMapTextures() const override;
 	void GridVisibility(CCamera* cam, IQuadDrawer* cb, float maxDist, int quadSize, int extraSize = 0) override;
 
 	void InitGroundDrawer() override;

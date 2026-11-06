@@ -5,10 +5,12 @@
 #include "Rendering/GL/myGL.h"
 #include "System/type2.h"
 #include <string>
+#include <cstdint>
 #include <memory>
 
 
 class CInfoTexture;
+namespace Shader { struct IProgramObject; }
 
 
 class IInfoTextureHandler {
@@ -51,12 +53,28 @@ public:
 	virtual const std::string& GetMode() const = 0;
 	virtual const std::vector<std::string> GetModes() const = 0;
 
+	// True when the active mode is "los". Shaders then grade the scene from
+	// the explicit LOS level codes (see SMFFragProg.glsl, LosGradeApply).
+	bool InLosMode() const { return (IsEnabled() && GetMode() == "los"); }
+
+	// Sets infoLosGrade, infoStrength (springsetting InfoTexStrength) and
+	// infoAnimTime on an enabled shader that samples the info texture.
+	void SetLosGradeUniforms(Shader::IProgramObject* shader) const;
+
 	virtual GLuint GetCurrentInfoTexture() const = 0;
+	// decoded LOS grade factors (also "$info:losgrade" for Lua), 0 if none
+	virtual GLuint GetLosGradeTexture() const = 0;
 	virtual int2   GetCurrentInfoTextureSize() const = 0;
 
 public:
 	virtual const CInfoTexture* GetInfoTextureConst(const std::string& name) const = 0;
 	virtual       CInfoTexture* GetInfoTexture     (const std::string& name)       = 0;
+
+private:
+	// per-draw-frame cache for SetLosGradeUniforms
+	mutable uint32_t losGradeCacheFrame = ~0u;
+	mutable float losGradeCacheStrength = 1.0f;
+	mutable float losGradeCacheEnabled = 0.0f;
 };
 
 extern std::unique_ptr<IInfoTextureHandler> infoTextureHandler;

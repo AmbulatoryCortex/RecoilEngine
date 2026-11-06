@@ -464,6 +464,7 @@ bool CGroundDecalHandler::ReloadDecalShaders() {
 	decalShader->SetUniform("shadowTex"      , 6);
 	decalShader->SetUniform("shadowColorTex" , 7);
 	decalShader->SetUniform("infoTex"        , 8);
+	decalShader->SetUniform("infoGradeTex"   , 9);
 
 	decalShader->SetUniform("waterMinColor"   , 0.0f, 0.0f, 0.0f);
 	decalShader->SetUniform("waterBaseColor"  , 0.0f, 0.0f, 0.0f);
@@ -514,6 +515,9 @@ void CGroundDecalHandler::BindTextures()
 	glActiveTexture(GL_TEXTURE8);
 	glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
 
+	glActiveTexture(GL_TEXTURE9);
+	glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetLosGradeTexture());
+
 	glActiveTexture(GL_TEXTURE0);
 }
 
@@ -543,6 +547,9 @@ void CGroundDecalHandler::UnbindTextures()
 	}
 
 	glActiveTexture(GL_TEXTURE8);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glActiveTexture(GL_TEXTURE9);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -822,6 +829,7 @@ void CGroundDecalHandler::Draw()
 	}
 
 	decalShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	infoTextureHandler->SetLosGradeUniforms(decalShader);
 	decalShader->SetUniform("curAdjustedFrame", std::max(gs->frameNum, 0) + globalRendering->timeOffset);
 	if (shadowHandler.ShadowsLoaded())
 		decalShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());

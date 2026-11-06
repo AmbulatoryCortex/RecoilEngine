@@ -13,11 +13,46 @@
 #include "System/Misc/TracyDefs.h"
 
 
+namespace {
+	// exposes the combiner's decoded LOS factors to Lua as "$info:losgrade"
+	// (r = luminance mul, g = saturation mul, b = jam; r < 0.25: not coded)
+	class CLosGradeInfoTexture : public CModernInfoTexture {
+	public:
+		explicit CLosGradeInfoTexture(const CInfoTextureCombiner* c)
+			: CModernInfoTexture("losgrade"), combiner(c)
+		{ texSize = c->GetTexSize(); }
+
+		GLuint GetTexture() override { return combiner->GetLosGradeTexture(); }
+		void Update() override {}
+		bool IsUpdateNeeded() override { return false; }
+	private:
+		const CInfoTextureCombiner* combiner;
+	};
+
+	// exposes the raw, unfiltered LOS level codes to Lua as "$info:loscodes"
+	// (R level 0/.33/.67/1, G jam, B >= 0.75 coded); read with texelFetch
+	class CLosCodeInfoTexture : public CModernInfoTexture {
+	public:
+		explicit CLosCodeInfoTexture(const CInfoTextureCombiner* c)
+			: CModernInfoTexture("loscodes"), combiner(c)
+		{ texSize = c->GetTexSize(); }
+
+		GLuint GetTexture() override { return combiner->GetLosCodeTexture(); }
+		void Update() override {}
+		bool IsUpdateNeeded() override { return false; }
+	private:
+		const CInfoTextureCombiner* combiner;
+	};
+}
+
+
 
 
 CInfoTextureHandler::CInfoTextureHandler()
 {
 	AddInfoTexture(infoTex = new CInfoTextureCombiner());
+	AddInfoTexture(new CLosGradeInfoTexture(infoTex));
+	AddInfoTexture(new CLosCodeInfoTexture(infoTex));
 	AddInfoTexture(new CLosTexture());
 	AddInfoTexture(new CAirLosTexture());
 	AddInfoTexture(new CMetalTexture());
@@ -133,6 +168,11 @@ bool CInfoTextureHandler::HasMode(const std::string& name) const
 	return infoTextures.contains(name);
 }
 
+
+GLuint CInfoTextureHandler::GetLosGradeTexture() const
+{
+	return (infoTex->GetLosGradeTexture());
+}
 
 GLuint CInfoTextureHandler::GetCurrentInfoTexture() const
 {

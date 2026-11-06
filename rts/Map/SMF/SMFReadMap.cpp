@@ -831,9 +831,21 @@ void CSMFReadMap::BindMiniMapTextures() const
 		glBindTexture(GL_TEXTURE_2D, shadingTex.GetID());
 	}
 
+	// decoded LOS factors, same tc as the info texture (MiniMapFragProg)
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetLosGradeTexture());
+
 	// tc (0,0) - (isx,isy)
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, shadingTex.GetID());
+}
+
+void CSMFReadMap::UnbindMiniMapTextures() const
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
 }
 
 
